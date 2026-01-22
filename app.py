@@ -32,16 +32,29 @@ def analyze_pdf(pdf_file):
     isins = list(set(re.findall(r'[A-Z]{2}[A-Z0-9]{10}', text)))
     return isins
 
-def get_isin_info(isin_list):
+def get_isin_info_and_performance(isin_list):
     results = []
+    benchmark_ticker = "SWDA.MI" # iShares MSCI World
+    try:
+        b_data = yf.download(benchmark_ticker, period="5y")['Close']
+        b_ret = ((b_data.iloc[-1] / b_data.iloc[0]) - 1) * 100
+    except:
+        b_ret = None
+
     for isin in isin_list[:5]:
         try:
-            ticker = yf.Ticker(isin)
-            name = ticker.info.get('longName', f"Fondo Bancario ({isin})")
-            results.append({"ISIN": isin, "Nome Strumento": name})
+            t = yf.Ticker(isin)
+            name = t.info.get('longName', f"Fondo ({isin})")
+            hist = t.history(period="5y")
+            if not hist.empty:
+                f_ret = ((hist['Close'].iloc[-1] / hist['Close'].iloc[0]) - 1) * 100
+                gap = b_ret - f_ret if b_ret else 0
+                results.append({"ISIN": isin, "Nome": name, "Resa 5a (%)": round(f_ret, 2), "Gap vs Mercato (%)": round(gap, 2)})
+            else:
+                results.append({"ISIN": isin, "Nome": name, "Resa 5a (%)": "N/D", "Gap vs Mercato (%)": "N/D"})
         except:
-            results.append({"ISIN": isin, "Nome Strumento": "Dato non pubblico"})
-    return results
+            results.append({"ISIN": isin, "Nome": "Privato/Non Quotato", "Resa 5a (%)": "N/D", "Gap vs Mercato (%)": "N/D"})
+    return results, b_ret
 
 def generate_pdf_report(capital, loss, years, bank_ter_perc, isins, vix_val):
     pdf = FPDF()
@@ -51,45 +64,51 @@ def generate_pdf_report(capital, loss, years, bank_ter_perc, isins, vix_val):
     pdf.ln(10)
     pdf.set_font("Arial", "", 12)
     pdf.cell(200, 10, f"Capitale Analizzato: Euro {capital:,.2f}", ln=True)
+    pdf.set_text_color(200, 0, 0)
     pdf.cell(200, 10, f"PERDITA STIMATA: Euro {loss:,.2f}", ln=True)
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(10)
     pdf.cell(200, 10, "Strumenti Rilevati:", ln=True)
     for i in isins:
         pdf.cell(200, 8, f"- {i}", ln=True)
+    pdf.ln(20)
+    pdf.set_font("Arial", "I", 8)
+    pdf.multi_cell(0, 5, "DISCLAIMER: Questo report ha scopo puramente informativo. Non costituisce consulenza finanziaria.")
     return pdf.output()
 
 # --- INTERFACCIA UTENTE ---
 
 st.title("🛡️ AEGIS: Vampire Detector")
 
-# 1. SCUDO LEGALE
 with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
-    st.warning("Strumento informativo. Non costituisce consulenza finanziaria. I dati non vengono salvati.")
+    st.warning("AEGIS e' un simulatore matematico. I dati non vengono salvati. Non e' consulenza finanziaria.")
 
-# 2. STATUS MERCATO
 vix_val, risk_level, icon = get_vix_status()
-st.info(f"STATUS: {icon} {risk_level} (VIX: {vix_val:.2f})")
+st.info(f"STATUS MERCATO: {icon} {risk_level} (VIX: {vix_val:.2f})")
 
-# 3. SIDEBAR
+# Sidebar
 st.sidebar.header("⚙️ Configurazione")
 capital = st.sidebar.number_input("Capitale Totale (€)", value=200000)
 bank_ter_input = st.sidebar.slider("Costo Annuo Banca (%)", 0.5, 5.0, 2.2)
-years = st.sidebar.slider("Anni di Investimento", 5, 30, 20)
+years = st.sidebar.slider("Anni", 5, 30, 20)
 
-# 4. ANALISI PDF
+# Main
 st.subheader("📂 Analisi Estratto Conto")
-uploaded_pdf = st.file_uploader("Carica il PDF", type="pdf")
+uploaded_pdf = st.file_uploader("Carica PDF bancario", type="pdf")
 
 found_isins = []
 if uploaded_pdf:
     found_isins = analyze_pdf(uploaded_pdf)
     if found_isins:
-        st.success(f"Trovati {len(found_isins)} ISIN")
-        with st.spinner("Ricerca nomi strumenti..."):
-            dettagli = get_isin_info(found_isins)
+        st.success(f"Trovati {len(found_isins)} codici ISIN.")
+        st.write("### 🔍 Identikit dei Vampiri e Performance")
+        with st.spinner("Analisi rendimenti storici..."):
+            dettagli, b_ret = get_isin_info_and_performance(found_isins)
             st.table(pd.DataFrame(dettagli))
+            if b_ret:
+                st.caption(f"Nota: Il benchmark MSCI World ha reso il {b_ret:.2f}% negli ultimi 5 anni.")
 
-# 5. CALCOLI
+# Calcoli Impatto
 st.divider()
 mkt_ret = 0.05
 etf_ter = 0.002
@@ -99,52 +118,16 @@ loss = final_aegis - final_bank
 
 col1, col2 = st.columns(2)
 with col1:
-    st.metric("PERDITA TOTALE", f"€{loss:,.0f}")
+    st.metric("PATRIMONIO PERSO", f"€{loss:,.0f}", delta=f"-{bank_ter_input}%/anno", delta_color="inverse")
+    if st.button("Genera Report Ufficiale"):
+        try:
+            report_data = generate_pdf_report(capital, loss, years, bank_ter_input, found_isins, vix_val)
+            st.download_button(label="💾 SCARICA PDF", data=report_data, file_name="Analisi_AEGIS.pdf", mime="application/pdf")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Errore: {e}")
+
 with col2:
     fig = px.pie(values=[final_bank, loss], names=['Tuo Patrimonio', 'Costi Banca'], 
-                 color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=.3)
-    st.plotly_chart(fig, use_container_width=True)
-
-# 6. REPORT
-if st.button("Genera Report Ufficiale"):
-    try:
-        report_data = generate_pdf_report(capital, loss, years, bank_ter_input, found_isins, vix_val)
-        st.download_button(
-            label="💾 SCARICA PDF",
-            data=report_data,
-            file_name="Analisi_AEGIS.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Errore generazione: {e}")
-# --- AGGIUNTA ALLA FASE A: CONFRONTO PERFORMANCE ---
-
-def compare_performance(isin_list):
-    """Confronta il rendimento degli ISIN con un Benchmark (MSCI World)"""
-    st.subheader("📈 Analisi Rendimenti: Fondo vs Mercato")
-    benchmark = "SWDA.MI" # iShares MSCI World ETF come standard
-    
-    try:
-        # Recupero dati Benchmark (Ultimi 5 anni)
-        b_data = yf.download(benchmark, period="5y")['Close']
-        b_ret = ((b_data.iloc[-1] / b_data.iloc[0]) - 1) * 100
-        
-        for isin in isin_list[:3]: # Analizziamo i primi 3 per non rallentare
-            ticker = yf.Ticker(isin)
-            hist = ticker.history(period="5y")
-            
-            if not hist.empty:
-                f_ret = ((hist['Close'].iloc[-1] / hist['Close'].iloc[0]) - 1) * 100
-                diff = b_ret - f_ret
-                
-                st.warning(f"**Strumento {isin}:** Negli ultimi 5 anni ha reso il **{f_ret:.1f}%**.")
-                st.info(f"Nello stesso periodo, un ETF Mondiale ha reso il **{b_ret:.1f}%**.")
-                if diff > 0:
-                    st.error(f"🔴 Hai perso un rendimento extra del **{diff:.1f}%** a causa della gestione inefficiente.")
-    except:
-        st.write("Dati storici per il confronto non disponibili per questi specifici ISIN.")
-
-# Inserisci la chiamata a questa funzione subito dopo la tabella degli ISIN
-if uploaded_pdf and found_isins:
-    # ... (tabella precedente)
-    compare_performance(found_isins)
+                 color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=.3, title="Ripartizione Capitale Finale")
+    st.plotly_chart(fig, use_container
