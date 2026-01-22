@@ -145,3 +145,23 @@ with c2:
     fig = px.pie(values=[f_b, loss], names=['Tuo Patrimonio', 'Costi Banca'], 
                  color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.3, title="Impatto dei costi sul tuo futuro")
     st.plotly_chart(fig, use_container_width=True)
+def calculate_vampire_score(ter, avg_gap):
+    # Logica: 50% peso dai costi, 50% dal gap di rendimento
+    score_ter = min(ter * 2, 5) # 2.5% TER = 5 punti
+    score_gap = min(avg_gap / 10, 5) if avg_gap > 0 else 0 # 50% Gap = 5 punti
+    total_score = round(score_ter + score_gap, 1)
+    
+    if total_score <= 3: return total_score, "PIPISTRELLO (Efficienza Buona)", "🟢"
+    if total_score <= 6: return total_score, "VAMPIRO COMUNE (Allerta)", "🟡"
+    return total_score, "CONTE DRACULA (Pericolo Totale)", "🔴"
+
+# --- Nella sezione visualizzazione, sotto la tabella ISIN ---
+if res:
+    avg_gap = np.mean([item['Gap %'] for item in res])
+    v_score, v_label, v_icon = calculate_vampire_score(ter, avg_gap)
+    
+    st.subheader("📊 Analisi del Rischio Vampiro")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("VAMPIRE SCORE", f"{v_score}/10")
+    c2.markdown(f"**LIVELLO: {v_icon} {v_label}**")
+    c3.progress(v_score / 10)
