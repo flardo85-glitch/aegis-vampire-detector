@@ -5,7 +5,6 @@ import plotly.express as px
 import numpy as np
 import pdfplumber
 import re
-from fpdf import FPDF
 
 # --- CONFIGURAZIONE ---
 st.set_page_config(page_title="AEGIS: Vampire Detector", layout="wide", page_icon="🧛")
@@ -35,7 +34,8 @@ def get_performance_data(isin_list):
     try:
         b_data = yf.download(bench, period="5y")['Close']
         b_ret = ((b_data.iloc[-1] / b_data.iloc[0]) - 1) * 100
-    except: b_ret = 60.0
+    except: 
+        b_ret = 60.0
     
     for isin in isin_list[:5]:
         try:
@@ -51,22 +51,21 @@ def get_performance_data(isin_list):
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Vampire Detector")
 
-# SCUDO LEGALE
 with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
     st.warning("""
     **Simulatore matematico. I dati non vengono salvati.**
-    1. Nessun Consiglio Finanziario: i dati sono a scopo puramente informativo.
-    2. Privacy: i documenti vengono analizzati in RAM e mai salvati su disco.
-    3. Precisione: verificare sempre i dati con il proprio prospetto informativo.
+    1. Nessun Consiglio Finanziario.
+    2. Privacy: Analisi in RAM, nessun salvataggio.
+    3. Precisione: Verificare sempre i prospetti ufficiali.
     """)
 
-# SIDEBAR
+# Sidebar
 st.sidebar.header("⚙️ Parametri")
 cap = st.sidebar.number_input("Capitale Totale (€)", value=200000)
 ter = st.sidebar.slider("Costo Annuo Banca (%)", 0.5, 5.0, 2.2)
 yrs = st.sidebar.slider("Orizzonte (Anni)", 5, 30, 20)
 
-# UPLOAD
+# Main
 up = st.file_uploader("Carica PDF per Analisi ISIN", type="pdf")
 res = []
 
@@ -89,8 +88,11 @@ loss = f_a - f_b
 c1, c2 = st.columns(2)
 with c1:
     st.metric("PERDITA TOTALE", f"€{loss:,.0f}", delta=f"-{ter}%/anno", delta_color="inverse")
-    st.write("Questo capitale è ciò che regali alla banca senza renderti conto.")
+    st.write("Capitale eroso da commissioni e inefficienze.")
 
 with c2:
-    fig = px.pie(values=[f_b, loss], names=['Tuo Patrimonio', 'Costi Banca'], 
-                 color_discrete_sequence=['#2ecc71',
+    # Grafico con sintassi blindata
+    labels = ['Patrimonio Finale', 'Costi Bancari']
+    values = [f_b, loss]
+    fig = px.pie(names=labels, values=values, color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.4)
+    st.plotly_chart(fig, use_container_width=True)
