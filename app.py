@@ -13,10 +13,10 @@ st.set_page_config(page_title="AEGIS: Vampire Detector", layout="wide", page_ico
 # --- DATABASE VAMPIRI (MEDIE DI SETTORE) ---
 vampire_data = {
     "Inserimento Manuale": 2.2,
-    "Fondi Bancari Standard (Media 2.2%)": 2.2,
-    "Gestione Patrimoniale Retail (Media 2.8%)": 2.8,
-    "Fondi di Fondi / Unit Linked (Media 3.5%)": 3.5,
-    "Private Banking (Media 1.8%)": 1.8
+    "Fondi Comuni Bancari (Media 2.2%)": 2.2,
+    "Gestioni Patrimoniali Retail (Media 2.8%)": 2.8,
+    "Polizze Unit Linked / Fondi di Fondi (Media 3.5%)": 3.5,
+    "Private Banking High Net Worth (Media 1.8%)": 1.8
 }
 
 # --- FUNZIONI CORE ---
@@ -53,7 +53,7 @@ with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
 
 # Sidebar Strategica
 st.sidebar.header("⚙️ Profilo di Costo")
-bank_profile = st.sidebar.selectbox("Seleziona il tuo intermediario:", list(vampire_data.keys()))
+bank_profile = st.sidebar.selectbox("Chi gestisce i tuoi soldi?", list(vampire_data.keys()))
 default_ter = vampire_data[bank_profile]
 
 cap = st.sidebar.number_input("Capitale Totale (€)", value=200000, step=10000)
@@ -87,18 +87,17 @@ loss = f_a - f_b
 col1, col2 = st.columns(2)
 with col1:
     st.metric("EMORRAGIA PATRIMONIALE", f"€{loss:,.0f}", delta=f"-{ter}%/anno", delta_color="inverse")
-    st.write("Questo è il costo della tua 'tranquillità' bancaria.")
     
     # CTA AGGRESSIVA
     st.markdown(f"""
-    ### 🚨 Cosa fare ora?
-    Hai appena scoperto che la banca ti sta sottraendo **€{loss:,.0f}**. 
-    Non è una simulazione, è la proiezione della tua realtà attuale.
+    ### 🚨 Non restare a guardare!
+    L'analisi mostra che il tuo patrimonio è sotto attacco. 
+    **€{loss:,.0f}** non sono solo numeri, è il costo della tua inazione.
     
-    [👉 **FERMA L'EMORRAGIA: Richiedi un Check-up Gratuito**](mailto:tua_mail@esempio.com?subject=Richiesta%20Analisi%20AEGIS&body=Ho%20ottenuto%20uno%20Vampire%20Score%20di%20{ter}%20e%20una%20perdita%20di%20{loss:,.0f}€.)
+    [👉 **RICHIEDI CHECK-UP PROFESSIONALE**](mailto:tua_mail@esempio.com?subject=Analisi%20AEGIS%20-%20Score%20{v_score}&body=Ho%20analizzato%20il%20mio%20portafoglio%20con%20AEGIS.%20Risultato:%20Score%20{v_score},%20Perdita%20stimata%20{loss:,.0f}€.)
     """)
 
 with col2:
-    fig = px.pie(names=['Tuo Patrimonio', 'Regalo alla Banca'], values=[f_b, loss], 
+    fig = px.pie(names=['Patrimonio per Te', 'Patrimonio per la Banca'], values=[f_b, loss], 
                  color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.4)
     st.plotly_chart(fig, use_container_width=True)
