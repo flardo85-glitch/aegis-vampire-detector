@@ -36,7 +36,7 @@ def get_performance_data(isin_list):
         b_data = yf.download(bench, period="5y", progress=False)
         b_ret = ((b_data['Close'].iloc[-1] / b_data['Close'].iloc[0]) - 1) * 100
     except: 
-        b_ret = 60.0 # Fallback storico
+        b_ret = 60.0 
     
     for isin in isin_list[:5]:
         try:
@@ -54,13 +54,12 @@ def get_performance_data(isin_list):
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Vampire Detector")
 
-# SCUDO LEGALE OBBLIGATORIO
-with st.expander("⚖️ AVVISO LEGALE E PRIVACY (DISCLAIMER)"):
+with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
     st.error("ATTENZIONE: Simulatore ad uso puramente informativo.")
     st.markdown("""
     * **No Consulenza:** Questo strumento non costituisce consulenza finanziaria personalizzata.
     * **Privacy:** Nessun dato o PDF viene salvato sui server. L'analisi è temporanea.
-    * **Precisione:** I dati possono subire ritardi o errori di estrazione. Verificare sempre i prospetti ufficiali (KIID).
+    * **Precisione:** I dati possono subire ritardi o errori. Verificare sempre i prospetti ufficiali (KIID).
     """)
 
 # Sidebar
@@ -70,10 +69,12 @@ cap = st.sidebar.number_input("Capitale Totale (€)", value=200000, step=10000)
 ter = st.sidebar.slider("Costo Annuo (%)", 0.5, 5.0, vampire_data[bank_profile])
 yrs = st.sidebar.slider("Anni di detenzione", 5, 30, 20)
 
+# INIZIALIZZAZIONE VARIABILI PER EVITARE NAMEERROR
+score = round(ter * 2, 1) 
+res = []
+
 # Main
 up = st.file_uploader("📂 Carica PDF Estratto Conto per Analisi ISIN", type="pdf")
-res = []
-score = 0
 
 if up:
     with st.spinner("Scovando i parassiti nel PDF..."):
@@ -100,8 +101,11 @@ loss = f_a - f_b
 c1, c2 = st.columns(2)
 with c1:
     st.metric("EMORRAGIA PATRIMONIALE", f"€{loss:,.0f}", delta=f"-{ter}%/anno", delta_color="inverse")
-    st.write(f"In {yrs} anni, la banca ti sottrae un intero appartamento in commissioni.")
-    st.markdown(f"### [👉 FERMA L'EMORRAGIA ORA](mailto:tua_mail@esempio.com?subject=Analisi%20AEGIS&body=Ho%20uno%20score%20di%20{score}.%20Voglio%20fermare%20la%20perdita%20di%20{loss:,.0f}€.)")
+    st.markdown(f"**In {yrs} anni, la banca ti sottrae un intero patrimonio in commissioni.**")
+    
+    # CTA MAIL CON VARIABILI SICURE
+    mailto_link = f"mailto:tua_mail@esempio.com?subject=Analisi%20AEGIS&body=Ho%20ottenuto%20uno%20score%20di%20{score}.%20La%20perdita%20stimata%20è%20di%20{loss:,.0f}€."
+    st.markdown(f"### [👉 FERMA L'EMORRAGIA ORA]({mailto_link})")
 
 with c2:
     fig = px.pie(names=['Tuo Patrimonio Futuro', 'Regalo alla Banca'], values=[f_b, loss], 
