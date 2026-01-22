@@ -13,7 +13,6 @@ st.set_page_config(page_title="AEGIS: Vampire Detector", layout="wide", page_ico
 # --- LOGICA VAMPIRE SCORE ---
 def get_vampire_level(ter, res):
     avg_gap = np.mean([item['Gap %'] for item in res]) if res else 0
-    # Score: 50% peso TER, 50% peso GAP
     score_ter = min(ter * 2, 5) 
     score_gap = min(avg_gap / 10, 5) if avg_gap > 0 else 0
     total = round(score_ter + score_gap, 1)
@@ -52,13 +51,22 @@ def get_performance_data(isin_list):
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Vampire Detector")
 
-with st.expander("⚖️ AVVISO LEGALE"):
-    st.warning("Simulatore matematico. I dati non vengono salvati. Non costituisce consulenza finanziaria.")
+# SCUDO LEGALE
+with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
+    st.warning("""
+    **Simulatore matematico. I dati non vengono salvati.**
+    1. Nessun Consiglio Finanziario: i dati sono a scopo puramente informativo.
+    2. Privacy: i documenti vengono analizzati in RAM e mai salvati su disco.
+    3. Precisione: verificare sempre i dati con il proprio prospetto informativo.
+    """)
 
+# SIDEBAR
+st.sidebar.header("⚙️ Parametri")
 cap = st.sidebar.number_input("Capitale Totale (€)", value=200000)
 ter = st.sidebar.slider("Costo Annuo Banca (%)", 0.5, 5.0, 2.2)
-yrs = st.sidebar.slider("Anni", 5, 30, 20)
+yrs = st.sidebar.slider("Orizzonte (Anni)", 5, 30, 20)
 
+# UPLOAD
 up = st.file_uploader("Carica PDF per Analisi ISIN", type="pdf")
 res = []
 
@@ -69,7 +77,6 @@ if up:
         res = get_performance_data(isins)
         st.table(pd.DataFrame(res))
         
-        # DISPLAY VAMPIRE SCORE
         score, label, icon = get_vampire_level(ter, res)
         st.subheader(f"📊 Vampire Score: {score}/10")
         st.info(f"{icon} LIVELLO: {label}")
@@ -82,10 +89,8 @@ loss = f_a - f_b
 c1, c2 = st.columns(2)
 with c1:
     st.metric("PERDITA TOTALE", f"€{loss:,.0f}", delta=f"-{ter}%/anno", delta_color="inverse")
-    if st.button("Scarica Verdetto PDF"):
-        st.write("Report in generazione...")
+    st.write("Questo capitale è ciò che regali alla banca senza renderti conto.")
 
 with c2:
     fig = px.pie(values=[f_b, loss], names=['Tuo Patrimonio', 'Costi Banca'], 
-                 color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.4)
-    st.plotly_chart(fig, use_container_width=True)
+                 color_discrete_sequence=['#2ecc71',
