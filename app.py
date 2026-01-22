@@ -36,7 +36,7 @@ def get_performance(isin_list):
         b_data = yf.download(bench, period="5y")['Close']
         b_ret = ((b_data.iloc[-1] / b_data.iloc[0]) - 1) * 100
     except:
-        b_ret = 60.0 # Fallback statistico mkt
+        b_ret = 60.0 
     
     for isin in isin_list[:5]:
         try:
@@ -56,45 +56,70 @@ def make_pdf(capital, loss, years, isins):
     pdf.cell(200, 10, "AEGIS: ANALISI IMPATTO PATRIMONIALE", ln=True, align='C')
     pdf.set_font("Arial", "", 12)
     pdf.ln(10)
-    pdf.cell(200, 10, f"Capitale: Euro {capital:,.2f}", ln=True)
+    pdf.cell(200, 10, f"Capitale Analizzato: Euro {capital:,.2f}", ln=True)
     pdf.cell(200, 10, f"Perdita stimata: Euro {loss:,.2f}", ln=True)
     pdf.ln(10)
-    pdf.multi_cell(0, 5, "DISCLAIMER: Documento informativo. Non costituisce consulenza finanziaria.")
+    # Disclaimer nel PDF
+    pdf.set_font("Arial", "I", 10)
+    disclaimer_text = (
+        "Simulatore matematico. I dati non vengono salvati. "
+        "I risultati non costituiscono consigli di investimento o consulenza finanziaria. "
+        "Verificare sempre i dati con un professionista abilitato."
+    )
+    pdf.multi_cell(0, 5, disclaimer_text)
     return pdf.output()
 
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Vampire Detector")
 
-with st.expander("⚖️ AVVISO LEGALE"):
-    st.warning("Simulatore matematico. I dati non vengono salvati.")
+# SEZIONE LEGALE COMPLETA
+with st.expander("⚖️ AVVISO LEGALE E PRIVACY (LEGGERE ATTENTAMENTE)"):
+    st.warning("""
+    **Simulatore matematico. I dati non vengono salvati.**
+    
+    * **Nessun Consiglio Finanziario:** I calcoli e le analisi prodotte da AEGIS hanno scopo puramente informativo e didattico. Non costituiscono sollecitazione al pubblico risparmio o consulenza finanziaria personalizzata.
+    * **Precisione dei Dati:** Le performance storiche non sono garanzia di rendimenti futuri. I dati estratti tramite OCR potrebbero contenere errori.
+    * **Privacy:** Nessun documento caricato viene memorizzato sui nostri server. L'analisi avviene in tempo reale e i dati vengono eliminati al termine della sessione.
+    """)
 
 vix, level, icon = get_vix_status()
-st.info(f"STATUS: {icon} {level} (VIX: {vix:.2f})")
+st.info(f"STATUS MERCATO: {icon} {level} (VIX: {vix:.2f})")
 
-cap = st.sidebar.number_input("Capitale (€)", value=200000)
-ter = st.sidebar.slider("Costo Banca (%)", 0.5, 5.0, 2.2)
-yrs = st.sidebar.slider("Anni", 5, 30, 20)
+# Sidebar
+cap = st.sidebar.number_input("Capitale Totale (€)", value=200000)
+ter = st.sidebar.slider("Costo Annuo Banca (%)", 0.5, 5.0, 2.2)
+yrs = st.sidebar.slider("Orizzonte (Anni)", 5, 30, 20)
 
-up = st.file_uploader("Carica PDF", type="pdf")
+# Main
+st.subheader("📂 Analisi Portafoglio")
+up = st.file_uploader("Trascina il tuo estratto conto PDF", type="pdf")
 isins_found = []
 
 if up:
     isins_found = analyze_pdf(up)
     if isins_found:
-        st.success(f"Trovati {len(isins_found)} ISIN")
+        st.success(f"Rilevati {len(isins_found)} strumenti finanziari.")
         res = get_performance(isins_found)
         st.table(pd.DataFrame(res))
 
 st.divider()
+# Analisi numerica
 final_b = cap * ((1 + 0.05 - (ter/100))**yrs)
 final_a = cap * ((1 + 0.05 - 0.002)**yrs)
 loss = final_a - final_b
 
-c1, c2 = st.columns(2)
-c1.metric("PERDITA TOTALE", f"€{loss:,.0f}")
-fig = px.pie(values=[final_b, loss], names=['Patrimonio', 'Costi'], hole=0.3)
-c2.plotly_chart(fig, use_container_width=True)
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("EMORRAGIA PATRIMONIALE", f"€{loss:,.0f}", delta=f"-{ter}%/anno", delta_color="inverse")
+    if st.button("Genera Report Ufficiale"):
+        try:
+            report = make_pdf(cap, loss, yrs, isins_found)
+            st.download_button("💾 SCARICA PDF", data=report, file_name="AEGIS_Analisi_Patrimoniale.pdf", mime="application/pdf")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Errore generazione: {e}")
 
-if st.button("Genera Report PDF"):
-    report = make_pdf(cap, loss, yrs, isins_found)
-    st.download_button("💾 SCARICA PDF", data=report, file_name="AEGIS_Report.pdf")
+with col2:
+    fig = px.pie(values=[final_b, loss], names=['Tuo Patrimonio Finale', 'Costi Intermediazione'], 
+                 color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.3, title="Impatto dei Costi sul Futuro")
+    st.plotly_chart(fig, use_container_width=True)
