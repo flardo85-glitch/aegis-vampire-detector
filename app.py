@@ -117,3 +117,34 @@ if st.button("Genera Report Ufficiale"):
         )
     except Exception as e:
         st.error(f"Errore generazione: {e}")
+# --- AGGIUNTA ALLA FASE A: CONFRONTO PERFORMANCE ---
+
+def compare_performance(isin_list):
+    """Confronta il rendimento degli ISIN con un Benchmark (MSCI World)"""
+    st.subheader("📈 Analisi Rendimenti: Fondo vs Mercato")
+    benchmark = "SWDA.MI" # iShares MSCI World ETF come standard
+    
+    try:
+        # Recupero dati Benchmark (Ultimi 5 anni)
+        b_data = yf.download(benchmark, period="5y")['Close']
+        b_ret = ((b_data.iloc[-1] / b_data.iloc[0]) - 1) * 100
+        
+        for isin in isin_list[:3]: # Analizziamo i primi 3 per non rallentare
+            ticker = yf.Ticker(isin)
+            hist = ticker.history(period="5y")
+            
+            if not hist.empty:
+                f_ret = ((hist['Close'].iloc[-1] / hist['Close'].iloc[0]) - 1) * 100
+                diff = b_ret - f_ret
+                
+                st.warning(f"**Strumento {isin}:** Negli ultimi 5 anni ha reso il **{f_ret:.1f}%**.")
+                st.info(f"Nello stesso periodo, un ETF Mondiale ha reso il **{b_ret:.1f}%**.")
+                if diff > 0:
+                    st.error(f"🔴 Hai perso un rendimento extra del **{diff:.1f}%** a causa della gestione inefficiente.")
+    except:
+        st.write("Dati storici per il confronto non disponibili per questi specifici ISIN.")
+
+# Inserisci la chiamata a questa funzione subito dopo la tabella degli ISIN
+if uploaded_pdf and found_isins:
+    # ... (tabella precedente)
+    compare_performance(found_isins)
