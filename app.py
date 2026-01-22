@@ -5,6 +5,8 @@ import plotly.express as px
 import numpy as np
 import pdfplumber
 import re
+from fpdf import FPDF
+import io
 
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="AEGIS: Vampire Detector", layout="wide", initial_sidebar_state="expanded")
@@ -14,7 +16,6 @@ st.set_page_config(page_title="AEGIS: Vampire Detector", layout="wide", initial_
 def get_vix_status():
     """Recupera l'indice VIX con gestione robusta del formato yfinance"""
     try:
-        # Usiamo auto_adjust=True per evitare KeyError 'Adj Close'
         data = yf.download('^VIX', period="2d", interval="1d", auto_adjust=True)
         if data.empty: return 20.0, "UNKNOWN", "⚪"
         vix = data['Close'].iloc[-1]
@@ -33,107 +34,121 @@ def analyze_pdf_intelligence(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         for page in pdf.pages:
             text += page.extract_text() + "\n"
-    
-    # Regex per ISIN (2 lettere + 10 caratteri alfanumerici)
     isins = list(set(re.findall(r'[A-Z]{2}[A-Z0-9]{10}', text)))
-    # Regex per percentuali di costo (es: 2.5%, 1,80 %)
     costs = re.findall(r'(\d+[,\.]\d+)\s*%', text)
-    
     return text, isins, costs
 
 def calculate_impact(capital, bank_ter, years=20):
     """Calcola la differenza di patrimonio tra banca ed ETF efficiente"""
-    mkt_ret = 0.05  # Rendimento medio stimato 5%
-    etf_ter = 0.002 # 0.2% commissione ETF
+    mkt_ret = 0.05
+    etf_ter = 0.002
     final_bank = capital * ((1 + mkt_ret - bank_ter)**years)
     final_aegis = capital * ((1 + mkt_ret - etf_ter)**years)
     return final_aegis, final_bank, final_aegis - final_bank
 
+def generate_pdf_report(capital, loss, years, bank_ter_perc, isins, vix_val):
+    """Genera un PDF professionale con i risultati dell'analisi"""
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("Arial", "B", 20)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(200, 20, "AEGIS: VAMPIRE DETECTOR REPORT", ln=True, align='C')
+    pdf.line(10, 30, 200, 30)
+    pdf.ln(10)
+    
+    # Sezione Risultati
+    pdf.set_font("Arial", "B", 14)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(200, 10, "1. SINTESI PATRIMONIALE", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(200, 10, f"- Capitale Iniziale Analizzato: Euro {capital:,.2f}", ln=True)
+    pdf.cell(200, 10, f"- Orizzonte Temporale: {years} anni", ln=True)
+    pdf.cell(200, 10, f"- Costo Medio Annuo (TER): {bank_ter_perc}%", ln=True)
+    
+    pdf.ln(5)
+    pdf.set_font("Arial", "B", 14)
+    pdf.set_text_color(192, 57, 43) # Rosso
+    pdf.cell(200, 10, f"PERDITA COMPOSTA STIMATA: Euro {loss:,.2f}", ln=True)
+    
+    # Sezione Tecnica
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 14)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(200, 10, "2. ANALISI TECNICA", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(200, 10, f"- Status Mercato al momento dell'analisi (VIX): {vix_val:.2f}", ln=True)
+    pdf.cell(200, 10, f"- Strumenti (ISIN) Rilevati nel documento: {len(isins)}", ln=True)
+    for i in isins[:10]: # Limita a primi 10 per spazio
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(200, 8, f"  > {i}", ln=True)
+    
+    # Footer Legale
+    pdf.ln(20)
+    pdf.set_font("Arial", "I", 8)
+    pdf.set_text_color(100, 100, 100)
+    disclaimer = ("DISCLAIMER: Questo report e generato automaticamente da AEGIS e ha scopo puramente "
+                  "informativo. Non costituisce consulenza finanziaria personalizzata. I calcoli si "
+                  "basano su stime di rendimento e costi dichiarati. Verificare sempre con un "
+                  "consulente abilitato prima di ogni decisione.")
+    pdf.multi_cell(0, 5, disclaimer)
+    
+    return pdf.output()
+
 # --- INTERFACCIA UTENTE ---
 
 st.title("🛡️ AEGIS: Vampire Detector")
-st.markdown("### Analisi Indipendente del Patrimonio e Rilevamento Costi Occulti")
+st.markdown("### L'unica difesa contro l'inefficienza bancaria.")
 
-# 1. SCUDO LEGALE (Disclaimer Obbligatorio)
-with st.expander("⚖️ AVVISO LEGALE E DISCLAIMER (Leggere prima dell'uso)"):
-    st.warning("""
-    **INFORMAZIONI IMPORTANTI:**
-    1. **Nessun Consiglio Finanziario:** AEGIS è uno strumento puramente matematico e informativo. I risultati non costituiscono sollecitazione al risparmio o consulenza finanziaria.
-    2. **Limitazione di Responsabilità:** L'accuratezza dipende dai dati inseriti e dalle fonti pubbliche. Non garantiamo l'assenza di errori.
-    3. **Privacy:** I documenti caricati vengono elaborati in memoria e non salvati su server esterni. Per sicurezza, si consiglia di oscurare dati anagrafici sensibili.
-    4. **Indipendenza:** Questo software non è affiliato a nessun istituto bancario.
-    """)
+# 1. DISCLAIMER
+with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
+    st.warning("AEGIS analizza i tuoi dati localmente. Non memorizziamo i tuoi PDF. Questo strumento è a scopo educativo e non costituisce consulenza finanziaria.")
 
-# 2. STATUS MERCATO (VIX)
+# 2. STATUS MERCATO
 vix_val, risk_level, icon = get_vix_status()
-st.info(f"**STATUS KILL-SWITCH:** {icon} {risk_level} | VIX: {vix_val:.2f}")
+st.info(f"**SENTIMENT DI MERCATO:** {icon} {risk_level} | VIX: {vix_val:.2f}")
 
-# 3. SIDEBAR PARAMETRI
-st.sidebar.header("⚙️ Parametri Analisi")
+# 3. SIDEBAR
+st.sidebar.header("⚙️ Parametri")
 capital = st.sidebar.number_input("Capitale Investito (€)", value=200000, step=10000)
-bank_ter_input = st.sidebar.slider("Costi Annuali Banca (%)", 0.5, 5.0, 2.2)
-years = st.sidebar.slider("Orizzonte Temporale (Anni)", 5, 30, 20)
+bank_ter_input = st.sidebar.slider("TER Annuo Stimato (%)", 0.5, 5.0, 2.2)
+years = st.sidebar.slider("Anni di Investimento", 5, 30, 20)
 bank_ter = bank_ter_input / 100
 
-# 4. CARICAMENTO E ANALISI PDF
+# 4. UPLOAD PDF
 st.divider()
-st.subheader("📂 Analisi Automatica Estratto Conto")
-uploaded_pdf = st.file_uploader("Carica il PDF bancario per estrarre ISIN e Costi", type="pdf")
+st.subheader("📂 Caricamento Estratto Conto")
+uploaded_pdf = st.file_uploader("Trascina il PDF bancario per l'analisi OCR", type="pdf")
 
+found_isins = []
 if uploaded_pdf:
-    with st.spinner("Scansione 'Vampire' in corso..."):
-        full_text, found_isins, found_costs = analyze_pdf_intelligence(uploaded_pdf)
-        
-        col_res1, col_res2 = st.columns(2)
-        with col_res1:
-            st.success("Analisi Testuale Completata")
-            st.write(f"**ISIN Rilevati:** {', '.join(found_isins) if found_isins else 'Nessuno'}")
-        with col_res2:
-            st.write(f"**Costi Potenziali Trovati:** {', '.join(found_costs[:5])}% ...")
+    with st.spinner("Analisi in corso..."):
+        text, found_isins, found_costs = analyze_pdf_intelligence(uploaded_pdf)
+        st.success(f"Analisi completata. Rilevati {len(found_isins)} codici ISIN.")
+        if found_isins:
+            st.write(f"Strumenti trovati: `{', '.join(found_isins)}`")
 
-# 5. VERDETTO MATEMATICO
+# 5. RISULTATI E GRAFICI
 st.divider()
 aegis_total, bank_total, loss = calculate_impact(capital, bank_ter, years)
 
-st.subheader("📊 Impatto dell'Erosione Bancaria")
-m1, m2, m3 = st.columns(3)
-m1.metric("Capitale con AEGIS", f"€{aegis_total:,.0f}")
-m2.metric("Capitale in Banca", f"€{bank_total:,.0f}")
-m3.metric("PATRIMONIO PERSO", f"€{loss:,.0f}", delta=f"-{bank_ter_input}%/anno", delta_color="inverse")
+col1, col2, col3 = st.columns(3)
+col1.metric("Capitale con AEGIS", f"€{aegis_total:,.0f}")
+col2.metric("Capitale in Banca", f"€{bank_total:,.0f}")
+col3.metric("PERDITA TOTALE", f"€{loss:,.0f}", delta_color="inverse")
 
-# Grafico
-plot_df = pd.DataFrame({
-    "Scenario": ["Patrimonio Efficiente (AEGIS)", "Patrimonio Erosione (Banca)"],
-    "Valore Finale (€)": [aegis_total, bank_total]
-})
-fig = px.bar(plot_df, x="Scenario", y="Valore Finale (€)", color="Scenario",
-             color_discrete_sequence=["#2ecc71", "#e74c3c"])
+fig = px.bar(x=["Efficienza (AEGIS)", "Banca Tradizionale"], y=[aegis_total, bank_total], 
+             title="Erosione del Capitale nel Tempo", color=["AEGIS", "Banca"],
+             color_discrete_map={"AEGIS": "#2ecc71", "Banca": "#e74c3c"})
 st.plotly_chart(fig, use_container_width=True)
 
-# 6. ANALISI CORRELAZIONE (KILL-SWITCH ALFA)
+# 6. GENERAZIONE REPORT PDF
 st.divider()
-st.subheader("🔗 Analisi Correlazione Asset")
-tickers_str = st.text_input("Inserisci i Ticker dei titoli (es. AAPL,MSFT,BTC-USD)", "AAPL,MSFT,GOOGL")
-
-if tickers_str:
+st.subheader("📥 Ottieni Prove Schiaccianti")
+if st.button("Genera Anteprima Report"):
     try:
-        t_list = [x.strip().upper() for x in tickers_str.split(",")]
-        # Fix per KeyError 'Adj Close'
-        mkt_data = yf.download(t_list, period="1y", auto_adjust=True)['Close']
-        if not mkt_data.empty:
-            corr_matrix = mkt_data.pct_change().corr()
-            st.plotly_chart(px.imshow(corr_matrix, text_auto=True, title="Matrice di Correlazione"))
-            
-            # Notifica Kill-Switch (Soglia 0.50)
-            high_corr_val = (corr_matrix.values > 0.50).sum() - len(t_list)
-            if high_corr_val > 0:
-                st.warning(f"🚨 ALERT CORRELAZIONE: {high_corr_val//2} coppie superano la soglia di 0.50. Diversificazione inefficiente.")
-    except:
-        st.error("Inserisci ticker validi per l'analisi.")
-
-# 7. GENERAZIONE REPORT
-st.divider()
-st.subheader("📥 Report Strategico")
-email = st.text_input("Lascia la tua email per ricevere l'analisi PDF completa:")
-if st.button("Invia Report"):
-    st.success(f"Richiesta presa in carico per {email}. Riceverai il report entro 5 minuti.")
+        report_bytes = generate_pdf_report(capital, loss, years, bank_ter_input, found_isins, vix_val)
+        st.download_button(
+            label="💾 SCARICA REPORT PDF UFFICIALE",
+            data=
