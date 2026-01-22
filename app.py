@@ -83,14 +83,27 @@ def make_pdf(capital, loss, years, bank_ter, isin_data):
     
     pdf.ln(20)
     pdf.set_font("Arial", "I", 8)
-    pdf.multi_cell(0, 5, "Simulatore matematico. I dati non vengono salvati. Non costituisce consulenza finanziaria.")
+    # NOTE LEGALI NEL PDF
+    disclaimer = (
+        "Simulatore matematico. I dati non vengono salvati. "
+        "I risultati non costituiscono consigli di investimento o consulenza finanziaria. "
+        "Verificare sempre i dati con un professionista abilitato."
+    )
+    pdf.multi_cell(0, 5, disclaimer)
     return pdf.output()
 
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Vampire Detector")
 
-with st.expander("⚖️ AVVISO LEGALE E PRIVACY"):
-    st.warning("Simulatore matematico. I dati non vengono salvati. Non costituisce consulenza finanziaria.")
+# REINSERIMENTO NOTE LEGALI RICHIESTE
+with st.expander("⚖️ AVVISO LEGALE E PRIVACY (LEGGERE ATTENTAMENTE)"):
+    st.warning("""
+    **Simulatore matematico. I dati non vengono salvati.**
+    
+    * **Nessun Consiglio Finanziario:** I calcoli e le analisi prodotte da AEGIS hanno scopo puramente informativo e didattico. Non costituiscono sollecitazione al pubblico risparmio o consulenza finanziaria personalizzata.
+    * **Precisione dei Dati:** Le performance storiche non sono garanzia di rendimenti futuri. I dati estratti tramite OCR potrebbero contenere errori.
+    * **Privacy:** Nessun documento caricato viene memorizzato sui nostri server. L'analisi avviene in tempo reale e i dati vengono eliminati al termine della sessione.
+    """)
 
 vix, level, icon = get_vix_status()
 st.info(f"STATUS MERCATO: {icon} {level} (VIX: {vix:.2f})")
@@ -105,7 +118,7 @@ res = []
 if up:
     isins = analyze_pdf(up)
     if isins:
-        st.success(f"Trovati {len(isins)} ISIN.")
+        st.success(f"Rilevati {len(isins)} codici ISIN.")
         res, b_ret = get_performance_data(isins)
         st.table(pd.DataFrame(res))
 
@@ -122,12 +135,13 @@ with c1:
             try:
                 out = make_pdf(cap, loss, yrs, ter, res)
                 st.download_button("💾 SCARICA PDF", data=out, file_name="AEGIS_Analisi.pdf", mime="application/pdf")
+                st.balloons()
             except Exception as e:
                 st.error(f"Errore: {e}")
         else:
-            st.error("Carica un PDF per includere i dati.")
+            st.error("Carica un PDF per includere i dati degli strumenti nel report.")
 
 with c2:
     fig = px.pie(values=[f_b, loss], names=['Tuo Patrimonio', 'Costi Banca'], 
-                 color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.3)
+                 color_discrete_sequence=['#2ecc71', '#e74c3c'], hole=0.3, title="Impatto dei costi sul tuo futuro")
     st.plotly_chart(fig, use_container_width=True)
