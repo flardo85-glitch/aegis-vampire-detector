@@ -92,12 +92,12 @@ if up:
 # Generazione del PDF in memoria
 pdf_bytes = generate_premium_pdf(res, score, loss, ter, yrs, cap)
 
-st.download_button()
-    label="📩 Scarica Perizia Tecnica Ufficiale (PDF)",
-    data=pdf_bytes,
-    file_name=f"Analisi_AEGIS_{datetime.date.today()}.pdf",
-    mime="application/pdf",
-    help="Clicca per ottenere il documento di audit completo con il dettaglio degli oneri."
+            st.download_button()
+            label="📩 Scarica Perizia Tecnica Ufficiale (PDF)",
+            data=pdf_bytes,
+            file_name=f"Analisi_AEGIS_{datetime.date.today()}.pdf",
+            mime="application/pdf",
+            help="Clicca per ottenere il documento di audit completo con il dettaglio degli oneri."
 
             if score > 6.5: st.error("⚠️ Inefficienza Elevata rilevata.")
             elif score > 3.5: st.warning("🟡 Inefficienza Moderata rilevata.")
@@ -214,3 +214,4 @@ def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
     pdf.multi_cell(0, 6, conclusione)
 
     return pdf.output(dest='S').encode('latin-1')
+
