@@ -6,12 +6,11 @@ import numpy as np
 import pdfplumber
 import re
 from fpdf import FPDF
-import datetime
 
-# --- CONFIGURAZIONE PAGINA ---
+# --- CONFIGURAZIONE ---
 st.set_page_config(page_title="AEGIS: Quantitative Audit", layout="wide", page_icon="🛡️")
 
-# --- MOTORE GENERAZIONE PDF (CORRETTO PER FPDF2) ---
+# --- MOTORE PDF (BLINDATURA FORENSE) ---
 class AegisReport(FPDF):
     def header(self):
         self.set_font('helvetica', 'B', 12)
@@ -25,66 +24,56 @@ class AegisReport(FPDF):
         self.set_font('helvetica', 'I', 7)
         self.set_text_color(150, 150, 150)
         disclaimer = (
-            "ESCLUSIONE DI RESPONSABILITA': Il presente report costituisce esclusivamente un'elaborazione algoritmica di dati storici pubblici. "
-            "Ai sensi dell'Art. 1, c. 5-septies del D.Lgs. 58/1998 (TUF), la presente analisi NON costituisce consulenza in materia di investimenti. "
-            "I rendimenti passati non sono indicativi di quelli futuri."
+            "ESCLUSIONE DI RESPONSABILITA' EX ART. 1, 94 TUF: Il presente report e' un'elaborazione algoritmica di dati storici pubblici. "
+            "Non costituisce sollecitazione al pubblico risparmio ne' consulenza personalizzata. "
+            "L'accuratezza dei dati dipende dalle fonti terze (Yahoo Finance). AEGIS declina ogni responsabilita' per decisioni basate su questo documento."
         )
         self.multi_cell(0, 4, disclaimer, align='C')
 
 def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
     pdf = AegisReport()
     pdf.add_page()
-    
-    # Titolo
-    pdf.set_font('helvetica', 'B', 22)
-    pdf.set_text_color(20, 33, 61) 
+    pdf.set_font('helvetica', 'B', 22); pdf.set_text_color(20, 33, 61) 
     pdf.cell(0, 15, 'CERTIFICATO DI AUDIT PATRIMONIALE', 0, 1, 'C')
     pdf.ln(10)
     
     # Box Verdetto
-    pdf.set_fill_color(245, 245, 245)
-    pdf.rect(10, 45, 190, 40, 'F')
-    pdf.set_xy(15, 50)
-    pdf.set_font('helvetica', 'B', 14)
-    pdf.set_text_color(192, 57, 43) 
+    pdf.set_fill_color(245, 245, 245); pdf.rect(10, 45, 190, 40, 'F')
+    pdf.set_xy(15, 50); pdf.set_font('helvetica', 'B', 14); pdf.set_text_color(192, 57, 43) 
     pdf.cell(0, 10, f'VALUTAZIONE DI EFFICIENZA: {float(score)}/10', 0, 1, 'L')
-    pdf.set_font('helvetica', '', 11)
-    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('helvetica', '', 11); pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 10, f'STATO: {"CRITICA" if score > 6 else "MIGLIORABILE"}', 0, 1, 'L')
     pdf.ln(20)
 
-    # Analisi Perdita
-    pdf.set_font('helvetica', 'B', 13)
-    pdf.cell(0, 10, '1. ANALISI TECNICA DELLA DISPERSIONE', 0, 1, 'L')
+    # Analisi
+    pdf.set_font('helvetica', 'B', 13); pdf.cell(0, 10, '1. ANALISI TECNICA DELLA DISPERSIONE', 0, 1, 'L')
     pdf.set_font('helvetica', '', 10)
-    # Rimosso simbolo Euro diretto per evitare errori di encoding
-    pdf.multi_cell(0, 6, f"La proiezione a {yrs} anni evidenzia una perdita stimata di EUR {float(loss):,.0f} a causa del prelievo commissionale e del gap di rendimento.")
+    pdf.multi_cell(0, 6, f"In un orizzonte di {yrs} anni, la proiezione evidenzia una dispersione stimata di EUR {float(loss):,.0f} dovuta a inefficienze commissionali e gap di mercato.")
     pdf.ln(10)
 
     # Tabella
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255, 255, 255)
+    pdf.set_font('helvetica', 'B', 10); pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255, 255, 255)
     pdf.cell(45, 10, ' ISIN RILEVATO', 1, 0, 'L', 1)
     pdf.cell(100, 10, ' STRUMENTO FINANZIARIO', 1, 0, 'L', 1)
     pdf.cell(45, 10, ' GAP TECNICO %', 1, 1, 'C', 1)
     
     pdf.set_text_color(0, 0, 0); pdf.set_font('helvetica', '', 9)
     for item in data_list:
-        # Pulizia stringhe per evitare caratteri non-latin1 se necessario
         nome_pulito = item['Nome'].encode('ascii', 'ignore').decode('ascii')
         pdf.cell(45, 10, f" {item['ISIN']}", 1)
         pdf.cell(100, 10, f" {nome_pulito[:50]}", 1)
         pdf.cell(45, 10, f"{float(item['Gap Tecnico %'])}% ", 1, 1, 'R')
     
-    # Ritorna i bytes direttamente (fpdf2 usa output() che ritorna bytearray o bytes)
-    return pdf.output()
+    # RESTITUISCE BYTES (RISOLUZIONE ERRORE)
+    return bytes(pdf.output())
 
-# --- LOGICA FILTRO E RECUPERO ---
+# --- LOGICA FILTRO ---
 def analyze_pdf(pdf_file):
     text = ""
     try:
         with pdfplumber.open(pdf_file) as pdf:
             for page in pdf.pages: text += (page.extract_text() or "") + "\n"
+        # Regex ISIN: 2 lettere + 9 alfanumerici + 1 numero finale
         raw_finds = re.findall(r'\b[A-Z]{2}[A-Z0-9]{9}[0-9]{1}\b', text)
         return list(set([i for i in raw_finds if sum(c.isdigit() for c in i) >= 3]))
     except: return []
@@ -114,27 +103,28 @@ def get_performance_data(isin_list):
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Analizzatore Tecnico di Efficienza")
 
+# --- BLINDATURA LEGALE INTEGRALE ---
 with st.container():
-    st.warning("⚠️ **AVVISO LEGALE OBBLIGATORIO (TUF Art. 1, 94 & Reg. Intermediari)**")
+    st.error("⚖️ **DISCLAIMER LEGALE OBBLIGATORIO - AI SENSI DEL TUF**")
     st.caption("""
-    IL PRESENTE SOFTWARE ('AEGIS') E' UN ALGORITMO DI PURA ANALISI MATEMATICA.
-    1. **Assenza di Consulenza:** Le analisi prodotte non costituiscono consulenza (ex Art. 1, c. 5-septies D.Lgs. 58/98).
-    2. **Limitazione di Responsabilita':** AEGIS non effettua profilatura di rischio nè verifica l'adeguatezza.
-    3. **Indipendenza:** AEGIS opera come software indipendente di audit quantitativo.
+    IL PRESENTE SOFTWARE OPERA COME MERO STRUMENTO DI CALCOLO MATEMATICO.
+    - **Esclusione Consulenza:** Le analisi NON costituiscono consulenza in materia di investimenti ai sensi dell'Art. 1, c. 5-septies D.Lgs. 58/98.
+    - **Responsabilita':** L'utente agisce in totale autonomia. AEGIS non e' responsabile per perdite derivanti dall'uso dei dati.
+    - **Standard Informativo:** Il report non sostituisce i documenti ufficiali (KID/Prospetto) che l'investitore deve consultare.
     """)
 
 with st.sidebar:
     st.header("⚙️ Audit Setup")
     with st.expander("❓ Guida ai Costi (TER)"):
         st.write("""
-        - **ETF Passivi:** 0.05% - 0.25%
-        - **Fondi Comuni:** 1.80% - 2.50%
-        - **Gestioni (GPM/GPF):** 2.00% - 3.50%
-        - **Unit Linked / PIP:** 3.50% - 4.80%
+        Il costo annuo (TER) prelevato dal tuo patrimonio:
+        - **Efficienza (ETF):** 0.05% - 0.25%
+        - **Standard (Fondi):** 1.80% - 2.50%
+        - **Critico (Unit Linked):** 3.50% - 4.80%
         """)
     profile = st.selectbox("Seleziona Prodotto:", ["Fondi Comuni", "Polizze Unit Linked", "Gestioni Retail", "Private Banking", "Dato Manuale"])
     costs = {"Fondi Comuni": 2.2, "Polizze Unit Linked": 3.8, "Gestioni Retail": 2.8, "Private Banking": 1.8, "Dato Manuale": 2.2}
-    cap = st.number_input("Capitale Totale (€)", value=200000, step=10000)
+    cap = st.number_input("Capitale (€)", value=200000, step=10000)
     ter = st.slider("TER (%) rilevato dal KID", 0.0, 5.0, costs[profile])
     yrs = st.slider("Orizzonte (Anni)", 5, 30, 20)
 
@@ -151,19 +141,19 @@ if up:
         score = round(min((ter * 2) + (avg_gap / 10), 10), 1)
         st.subheader(f"📊 Vampire Score: {score}/10")
         st.divider()
-        email = st.text_input("Sblocca il Report Certificato (Mail):")
+        email = st.text_input("Inserisci Mail per scaricare l'Audit:")
         if email and "@" in email:
             try:
-                # FIX: In fpdf2 output() restituisce già i bytes
-                pdf_output = generate_premium_pdf(res, score, loss, ter, yrs, cap)
+                # CONVERSIONE ESPLICITA IN BYTES
+                pdf_data = generate_premium_pdf(res, score, loss, ter, yrs, cap)
                 st.download_button(
                     label="📩 Scarica Perizia Tecnica (PDF)",
-                    data=pdf_output,
+                    data=pdf_data,
                     file_name="Perizia_AEGIS.pdf",
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"Errore tecnico nella generazione del PDF: {str(e)}")
+                st.error(f"Errore generazione: {str(e)}")
     else:
         st.warning("Nessun ISIN conforme rilevato.")
 
