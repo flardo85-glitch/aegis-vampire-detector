@@ -10,6 +10,11 @@ from fpdf import FPDF
 # --- CONFIGURAZIONE ---
 st.set_page_config(page_title="AEGIS: Quantitative Audit", layout="wide", page_icon="🛡️")
 
+# --- FUNZIONE FORMATTAZIONE MONETARIA ---
+def format_euro(amount):
+    """Formatta i numeri in standard italiano: 163.000,00€"""
+    return f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + "€"
+
 # --- MOTORE PDF (BLINDATURA FORENSE) ---
 class AegisReport(FPDF):
     def header(self):
@@ -45,10 +50,11 @@ def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
     pdf.cell(0, 10, f'STATO: {"CRITICA" if score > 6 else "MIGLIORABILE"}', 0, 1, 'L')
     pdf.ln(20)
 
-    # Analisi
+    # Analisi (FORMATO CORRETTO)
+    loss_formattata = format_euro(loss)
     pdf.set_font('helvetica', 'B', 13); pdf.cell(0, 10, '1. ANALISI TECNICA DELLA DISPERSIONE', 0, 1, 'L')
     pdf.set_font('helvetica', '', 10)
-    pdf.multi_cell(0, 6, f"In un orizzonte di {yrs} anni, la proiezione evidenzia una dispersione stimata di EUR {float(loss):,.0f} dovuta a inefficienze commissionali e gap di mercato.")
+    pdf.multi_cell(0, 6, f"In un orizzonte di {yrs} anni, la proiezione evidenzia una dispersione stimata di {loss_formattata} dovuta a inefficienze commissionali e gap di mercato.")
     pdf.ln(10)
 
     # Tabella
@@ -64,16 +70,14 @@ def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
         pdf.cell(100, 10, f" {nome_pulito[:50]}", 1)
         pdf.cell(45, 10, f"{float(item['Gap Tecnico %'])}% ", 1, 1, 'R')
     
-    # RESTITUISCE BYTES (RISOLUZIONE ERRORE)
     return bytes(pdf.output())
 
-# --- LOGICA FILTRO ---
+# --- LOGICA FILTRO E RECUPERO ---
 def analyze_pdf(pdf_file):
     text = ""
     try:
         with pdfplumber.open(pdf_file) as pdf:
             for page in pdf.pages: text += (page.extract_text() or "") + "\n"
-        # Regex ISIN: 2 lettere + 9 alfanumerici + 1 numero finale
         raw_finds = re.findall(r'\b[A-Z]{2}[A-Z0-9]{9}[0-9]{1}\b', text)
         return list(set([i for i in raw_finds if sum(c.isdigit() for c in i) >= 3]))
     except: return []
@@ -110,7 +114,7 @@ with st.container():
     IL PRESENTE SOFTWARE OPERA COME MERO STRUMENTO DI CALCOLO MATEMATICO.
     - **Esclusione Consulenza:** Le analisi NON costituiscono consulenza in materia di investimenti ai sensi dell'Art. 1, c. 5-septies D.Lgs. 58/98.
     - **Responsabilita':** L'utente agisce in totale autonomia. AEGIS non e' responsabile per perdite derivanti dall'uso dei dati.
-    - **Standard Informativo:** Il report non sostituisce i documenti ufficiali (KID/Prospetto) che l'investitore deve consultare.
+    - **Standard Informativo:** Il report non sostituisce i documenti ufficiali (KID/Prospetto).
     """)
 
 with st.sidebar:
@@ -144,7 +148,6 @@ if up:
         email = st.text_input("Inserisci Mail per scaricare l'Audit:")
         if email and "@" in email:
             try:
-                # CONVERSIONE ESPLICITA IN BYTES
                 pdf_data = generate_premium_pdf(res, score, loss, ter, yrs, cap)
                 st.download_button(
                     label="📩 Scarica Perizia Tecnica (PDF)",
@@ -160,5 +163,5 @@ if up:
 st.divider()
 c1, c2 = st.columns(2)
 with c1:
-    st.metric("DISPERSIONE PATRIMONIALE STIMATA", f"EUR {loss:,.0f}")
+    st.metric("DISPERSIONE PATRIMONIALE STIMATA", format_euro(loss))
     st.plotly_chart(px.pie(names=['Netto', 'Costi'], values=[f_b, loss], hole=0.4, color_discrete_sequence=['#2ecc71', '#e74c3c']))
