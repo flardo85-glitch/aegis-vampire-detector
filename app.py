@@ -10,12 +10,12 @@ from fpdf import FPDF
 # --- CONFIGURAZIONE ---
 st.set_page_config(page_title="AEGIS: Quantitative Audit", layout="wide", page_icon="🛡️")
 
-# --- FUNZIONE FORMATTAZIONE MONETARIA ---
-def format_euro(amount):
-    """Formatta i numeri in standard italiano: 163.000,00€"""
-    return f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + "€"
+# --- FUNZIONE FORMATTAZIONE MONETARIA (CORRETTA) ---
+def format_euro_ui(amount):
+    """Per la visualizzazione nell'app Streamlit"""
+    return f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
 
-# --- MOTORE PDF (BLINDATURA FORENSE) ---
+# --- MOTORE PDF (BLINDATURA E FIX EURO) ---
 class AegisReport(FPDF):
     def header(self):
         self.set_font('helvetica', 'B', 12)
@@ -28,16 +28,19 @@ class AegisReport(FPDF):
         self.set_y(-30)
         self.set_font('helvetica', 'I', 7)
         self.set_text_color(150, 150, 150)
+        # Sostituzione manuale dell'apice e dei simboli per evitare crash
         disclaimer = (
             "ESCLUSIONE DI RESPONSABILITA' EX ART. 1, 94 TUF: Il presente report e' un'elaborazione algoritmica di dati storici pubblici. "
             "Non costituisce sollecitazione al pubblico risparmio ne' consulenza personalizzata. "
-            "L'accuratezza dei dati dipende dalle fonti terze (Yahoo Finance). AEGIS declina ogni responsabilita' per decisioni basate su questo documento."
+            "L'accuratezza dei dati dipende dalle fonti terze. AEGIS declina ogni responsabilita' per decisioni basate su questo documento."
         )
         self.multi_cell(0, 4, disclaimer, align='C')
 
 def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
     pdf = AegisReport()
     pdf.add_page()
+    
+    # Titolo
     pdf.set_font('helvetica', 'B', 22); pdf.set_text_color(20, 33, 61) 
     pdf.cell(0, 15, 'CERTIFICATO DI AUDIT PATRIMONIALE', 0, 1, 'C')
     pdf.ln(10)
@@ -50,11 +53,14 @@ def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
     pdf.cell(0, 10, f'STATO: {"CRITICA" if score > 6 else "MIGLIORABILE"}', 0, 1, 'L')
     pdf.ln(20)
 
-    # Analisi (FORMATO CORRETTO)
-    loss_formattata = format_euro(loss)
+    # Analisi Perdita
+    # Nota: Usiamo "EUR" come testo per massima sicurezza o il carattere latin-1 mappato
+    valuta = "EUR" 
+    perdita_testo = f"{float(loss):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
     pdf.set_font('helvetica', 'B', 13); pdf.cell(0, 10, '1. ANALISI TECNICA DELLA DISPERSIONE', 0, 1, 'L')
     pdf.set_font('helvetica', '', 10)
-    pdf.multi_cell(0, 6, f"In un orizzonte di {yrs} anni, la proiezione evidenzia una dispersione stimata di {loss_formattata} dovuta a inefficienze commissionali e gap di mercato.")
+    pdf.multi_cell(0, 6, f"In un orizzonte di {yrs} anni, la proiezione evidenzia una dispersione stimata di {valuta} {perdita_testo} dovuta a inefficienze commissionali e gap di mercato.")
     pdf.ln(10)
 
     # Tabella
@@ -104,31 +110,24 @@ def get_performance_data(isin_list):
             results.append({"ISIN": isin, "Nome": f"Strumento {isin}", "Gap Tecnico %": 35.0})
     return results, b_ret
 
-# --- INTERFACCIA ---
+# --- INTERFACCIA STREAMLIT ---
 st.title("🛡️ AEGIS: Analizzatore Tecnico di Efficienza")
 
-# --- BLINDATURA LEGALE INTEGRALE ---
 with st.container():
     st.error("⚖️ **DISCLAIMER LEGALE OBBLIGATORIO - AI SENSI DEL TUF**")
     st.caption("""
     IL PRESENTE SOFTWARE OPERA COME MERO STRUMENTO DI CALCOLO MATEMATICO.
-    - **Esclusione Consulenza:** Le analisi NON costituiscono consulenza in materia di investimenti ai sensi dell'Art. 1, c. 5-septies D.Lgs. 58/98.
-    - **Responsabilita':** L'utente agisce in totale autonomia. AEGIS non e' responsabile per perdite derivanti dall'uso dei dati.
-    - **Standard Informativo:** Il report non sostituisce i documenti ufficiali (KID/Prospetto).
+    - **Assenza di Consulenza:** Le analisi NON costituiscono consulenza ai sensi dell'Art. 1, c. 5-septies D.Lgs. 58/98.
+    - **Indipendenza:** AEGIS opera come audit indipendente. Consultare i documenti ufficiali (KID).
     """)
 
 with st.sidebar:
     st.header("⚙️ Audit Setup")
     with st.expander("❓ Guida ai Costi (TER)"):
-        st.write("""
-        Il costo annuo (TER) prelevato dal tuo patrimonio:
-        - **Efficienza (ETF):** 0.05% - 0.25%
-        - **Standard (Fondi):** 1.80% - 2.50%
-        - **Critico (Unit Linked):** 3.50% - 4.80%
-        """)
+        st.write("Efficienza: 0.2% | Bancari: 2.2% | Polizze: 3.8%")
     profile = st.selectbox("Seleziona Prodotto:", ["Fondi Comuni", "Polizze Unit Linked", "Gestioni Retail", "Private Banking", "Dato Manuale"])
     costs = {"Fondi Comuni": 2.2, "Polizze Unit Linked": 3.8, "Gestioni Retail": 2.8, "Private Banking": 1.8, "Dato Manuale": 2.2}
-    cap = st.number_input("Capitale (€)", value=200000, step=10000)
+    cap = st.number_input("Capitale Totale (€)", value=200000, step=10000)
     ter = st.slider("TER (%) rilevato dal KID", 0.0, 5.0, costs[profile])
     yrs = st.slider("Orizzonte (Anni)", 5, 30, 20)
 
@@ -156,12 +155,12 @@ if up:
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"Errore generazione: {str(e)}")
+                st.error(f"Errore critico: {str(e)}")
     else:
         st.warning("Nessun ISIN conforme rilevato.")
 
 st.divider()
 c1, c2 = st.columns(2)
 with c1:
-    st.metric("DISPERSIONE PATRIMONIALE STIMATA", format_euro(loss))
+    st.metric("DISPERSIONE PATRIMONIALE STIMATA", format_euro_ui(loss))
     st.plotly_chart(px.pie(names=['Netto', 'Costi'], values=[f_b, loss], hole=0.4, color_discrete_sequence=['#2ecc71', '#e74c3c']))
