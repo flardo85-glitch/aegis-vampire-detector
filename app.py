@@ -24,7 +24,8 @@ class AegisReport(FPDF):
         self.set_y(-25)
         self.set_font('Arial', 'I', 8)
         self.set_text_color(150, 150, 150)
-        self.multi_cell(0, 5, "Disclaimer: Il presente report e' un'elaborazione matematica di dati storici e non costituisce consulenza finanziaria personalizzata ai sensi del TUF.", 0, 'C')
+        # Disclaimer nel PDF per protezione forense
+        self.multi_cell(0, 5, "Disclaimer: Il presente report e' un'elaborazione matematica basata su dati storici e non costituisce consulenza finanziaria personalizzata ai sensi del TUF art. 1, comma 5-septies.", 0, 'C')
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
@@ -83,16 +84,8 @@ def analyze_pdf(pdf_file):
     try:
         with pdfplumber.open(pdf_file) as pdf:
             for page in pdf.pages: text += (page.extract_text() or "") + "\n"
-        
-        # Regex base: 2 lettere + 10 caratteri alfanumerici
         raw_finds = re.findall(r'\b[A-Z]{2}[A-Z0-9]{10}\b', text)
-        
-        # FILTRO CHIRURGICO: Un ISIN deve avere almeno 2 numeri (esclude parole come ANTIRICICLAGGIO)
-        valid_isins = [
-            isin for isin in raw_finds 
-            if sum(c.isdigit() for c in isin) >= 2
-        ]
-        
+        valid_isins = [isin for isin in raw_finds if sum(c.isdigit() for c in isin) >= 2]
         return list(set(valid_isins))
     except: return []
 
@@ -114,34 +107,37 @@ def get_performance_data(isin_list):
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Analizzatore Tecnico di Efficienza")
 
-# --- BLINDATURA LEGALE (REINTEGRATA) ---
-with st.expander("⚠️ NOTE LEGALI E DISCLAIMER - LEGGERE PRIMA DELL'USO"):
+# --- BLINDATURA LEGALE ESAUSTIVA ---
+with st.expander("⚠️ NOTE LEGALI E DISCLAIMER - AI SENSI DEL TUF"):
     st.caption("""
-    AEGIS è un software di calcolo matematico basato su dati storici pubblici. 
+    IL PRESENTE SOFTWARE AEGIS OPERA COME STRUMENTO DI CALCOLO MATEMATICO.
     Le elaborazioni prodotte NON costituiscono:
-    1. Consulenza in materia di investimenti (ex art. 1 comma 5 septies TUF).
-    2. Sollecitazione al pubblico risparmio o raccomandazione personalizzata.
-    L'utente dichiara di utilizzare i dati a scopo puramente informativo.
+    1. Consulenza in materia di investimenti ai sensi dell'art. 1, comma 5-septies del D.Lgs. 58/1998 (TUF).
+    2. Sollecitazione al pubblico risparmio ai sensi dell'art. 94 del TUF.
+    3. Raccomandazione personalizzata.
+    L'utente dichiara di essere consapevole che i risultati sono proiezioni basate su dati storici e non garantiscono rendimenti futuri.
+    Prima di ogni investimento, consultare i Prospetti Informativi (KIID) ufficiali degli emittenti.
     """)
 
 with st.sidebar:
     st.header("⚙️ Audit Setup")
-    # --- GUIDA UTENTE (REINTEGRATA) ---
-    with st.expander("❓ Dove trovo i costi?"):
+    # --- GUIDA UTENTE COMPLETA ---
+    with st.expander("❓ Guida ai Costi (TER)"):
         st.write("""
-        Cerca 'Spese Correnti' o 'TER' nel documento KIID della tua banca. 
-        **Medie di settore:**
-        - Fondi comuni: 1.8% - 2.5%
-        - Polizze Vita: 3% - 4.5%
-        - ETF efficienti: 0.05% - 0.2%
+        Il **TER (Total Expense Ratio)** rappresenta il costo annuo trattenuto dalla banca.
+        **Parametri di riferimento:**
+        - **ETF Efficienti:** 0.05% - 0.25%
+        - **Fondi Bancari Retail:** 1.5% - 2.5%
+        - **Gestioni Patrimoniali:** 2.0% - 3.0%
+        - **Polizze Unit Linked:** 3.0% - 4.5%
         """)
     profile = st.selectbox("Profilo Prodotto:", ["Dato Manuale", "Fondi Comuni", "Gestioni Retail", "Polizze Unit Linked", "Private Banking"])
     costs = {"Dato Manuale": 2.2, "Fondi Comuni": 2.2, "Gestioni Retail": 2.8, "Polizze Unit Linked": 3.5, "Private Banking": 1.8}
     cap = st.number_input("Capitale (€)", value=200000, step=10000)
-    ter = st.slider("Oneri Annui (%)", 0.0, 5.0, costs[profile])
+    ter = st.slider("TER / Oneri Annui (%)", 0.0, 5.0, costs[profile])
     yrs = st.slider("Orizzonte (Anni)", 5, 30, 20)
     st.divider()
-    st.info("Algoritmo AEGIS v2.4 - Indipendente.")
+    st.info("AEGIS v2.5 - Audit Forense Indipendente.")
 
 # Calcoli
 f_b = cap * ((1 + 0.05 - (ter/100))**yrs)
@@ -151,7 +147,7 @@ loss = f_a - f_b
 up = st.file_uploader("📂 Carica Estratto Conto / KID (PDF)", type="pdf")
 
 if up:
-    with st.spinner("Filtraggio rumore e analisi ISIN..."):
+    with st.spinner("Analisi tecnica in corso..."):
         isins = analyze_pdf(up)
         if isins:
             res, b_ret = get_performance_data(isins)
@@ -164,7 +160,7 @@ if up:
                 # --- LEAD WALL ---
                 st.divider()
                 st.markdown("### 📥 Sblocca la Perizia Tecnica Completa")
-                email = st.text_input("Inserisci la mail per scaricare il PDF:")
+                email = st.text_input("Inserisci la mail per il report:")
                 if email and "@" in email:
                     try:
                         pdf_bytes = generate_premium_pdf(res, score, loss, ter, yrs, cap)
@@ -174,13 +170,13 @@ if up:
             else:
                 st.error("Dati di mercato non recuperabili.")
         else:
-            st.warning("Nessun ISIN valido rilevato. Il sistema ha escluso il rumore del testo.")
+            st.warning("Nessun ISIN valido rilevato.")
 
 st.divider()
 c1, c2 = st.columns(2)
 with c1:
     st.metric("EMORRAGIA PATRIMONIALE", f"€{loss:,.0f}", delta=f"-{ter}% cost/anno", delta_color="inverse")
-    st.plotly_chart(px.pie(names=['Netto', 'Dispersione'], values=[f_b, loss], hole=0.4, color_discrete_sequence=['#2ecc71', '#e74c3c']))
+    st.plotly_chart(px.pie(names=['Netto', 'Dispersione'], values=[f_b, loss], hole=0.4, color_discrete_sequence=['#2ecc71', '#e74c3c']), use_container_width=True)
 with c2:
-    st.markdown("### [📩 Contatta Analista](mailto:tua_mail@esempio.com)")
-    st.write("Se lo score supera 5.0, la banca sta incassando più di te sul tuo rischio.")
+    st.markdown("### [📩 Contatta Analista Senior](mailto:tua_mail@esempio.com)")
+    st.write("Analisi basata sull'impatto dei costi occulti e della sottoperformance storica.")
