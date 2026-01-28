@@ -11,7 +11,7 @@ import datetime
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="AEGIS: Quantitative Audit", layout="wide", page_icon="🛡️")
 
-# --- MOTORE GENERAZIONE PDF (INDISTRUTTIBILE) ---
+# --- MOTORE GENERAZIONE PDF ---
 class AegisReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 12)
@@ -59,7 +59,7 @@ def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
     pdf.multi_cell(0, 6, analisi_psico)
     pdf.ln(10)
 
-    # Tabella ISIN (Fix ValueError con float casting)
+    # Tabella ISIN
     pdf.set_font('Arial', 'B', 11)
     pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255, 255, 255)
     pdf.cell(40, 10, ' CODICE ISIN', 1, 0, 'L', 1)
@@ -77,7 +77,7 @@ def generate_premium_pdf(data_list, score, loss, ter, yrs, cap):
 
     return pdf.output(dest='S').encode('latin-1')
 
-# --- LOGICA DATI ---
+# --- LOGICA DATI E FILTRO ISIN ---
 vampire_data = {"Dato Manuale": 2.2, "Fondi Comuni": 2.2, "Gestioni Retail": 2.8, "Polizze Unit Linked": 3.5, "Private Banking": 1.8}
 
 def analyze_pdf(pdf_file):
@@ -85,7 +85,18 @@ def analyze_pdf(pdf_file):
     try:
         with pdfplumber.open(pdf_file) as pdf:
             for page in pdf.pages: text += (page.extract_text() or "") + "\n"
-        return list(set(re.findall(r'[A-Z]{2}[A-Z0-9]{10}', text)))
+        
+        # Regex base per codici di 12 caratteri
+        raw_finds = re.findall(r'[A-Z]{2}[A-Z0-9]{10}', text)
+        
+        # FILTRO CHIRURGICO: Esclude parole in maiuscolo (es. ANTIRICICLAGGIO) 
+        # Un ISIN valido DEVE contenere almeno un numero.
+        clean_isins = [
+            isin for isin in raw_finds 
+            if any(char.isdigit() for char in isin)
+        ]
+        
+        return list(set(clean_isins))
     except: return []
 
 def get_performance_data(isin_list):
@@ -106,7 +117,7 @@ def get_performance_data(isin_list):
 # --- INTERFACCIA ---
 st.title("🛡️ AEGIS: Analizzatore Tecnico di Efficienza")
 
-# --- BLINDATURA LEGALE (BUNKER) ---
+# --- BLINDATURA LEGALE ---
 with st.expander("⚠️ NOTE LEGALI E DISCLAIMER - LEGGERE PRIMA DELL'USO"):
     st.caption("""
     AEGIS è un software di calcolo matematico basato su dati storici pubblici. 
@@ -118,7 +129,7 @@ with st.expander("⚠️ NOTE LEGALI E DISCLAIMER - LEGGERE PRIMA DELL'USO"):
 
 with st.sidebar:
     st.header("⚙️ Audit Setup")
-    # --- LA GUIDA UTENTE ---
+    # --- GUIDA UTENTE ---
     with st.expander("❓ Dove trovo i costi?"):
         st.write("""
         Cerca 'Spese Correnti' o 'TER' nel documento KIID della tua banca. 
@@ -132,7 +143,7 @@ with st.sidebar:
     ter = st.slider("Oneri Annui Dichiarati (%)", 0.0, 5.0, vampire_data[profile])
     yrs = st.slider("Orizzonte Temporale (Anni)", 5, 30, 20)
     st.divider()
-    st.info("Algoritmo AEGIS v2.1 - Audit quantitativo indipendente.")
+    st.info("Algoritmo AEGIS v2.2 - Audit quantitativo indipendente.")
 
 # Calcoli Proiezione
 f_b = cap * ((1 + 0.05 - (ter/100))**yrs)
@@ -168,7 +179,7 @@ if up:
                 except Exception as e:
                     st.error(f"Errore generazione PDF: {e}")
         else:
-            st.warning("Nessun ISIN rilevato. Verifica il formato del PDF.")
+            st.warning("Nessun codice ISIN valido rilevato nel documento.")
 
 st.divider()
 c1, c2 = st.columns(2)
@@ -180,5 +191,5 @@ with c1:
 with c2:
     st.markdown(f"### [📩 Contatta un Analista Senior](mailto:tua_mail@esempio.com?subject=Richiesta%20Audit%20AEGIS)")
     if score_base > 5:
-        st.error(f"Il tuo score di {score_base} indica un prelievo forzoso eccessivo. Stai lavorando per la banca.")
+        st.error(f"Il tuo score di {score_base} indica un prelievo forzoso eccessivo.")
     st.write("Questo strumento utilizza algoritmi quantitativi per evidenziare cio' che i rendiconti cartacei spesso omettono.")
