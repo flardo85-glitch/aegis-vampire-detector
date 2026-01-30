@@ -7,8 +7,16 @@ import pdfplumber
 import re
 from fpdf import FPDF
 
-# --- CONFIGURAZIONE ---
-st.set_page_config(page_title="AEGIS: Quantitative Audit", layout="wide", page_icon="🛡️")
+# --- CONFIGURAZIONE DASHBOARD ---
+st.set_page_config(page_title="AEGIS: Intelligence Dashboard", layout="wide", page_icon="🛡️")
+
+# --- CUSTOM CSS PER LOOK PREMIUM ---
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
+    </style>
+    """, unsafe_allow_html=True)
 
 def format_euro_ui(amount):
     return f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
@@ -17,61 +25,39 @@ def format_euro_pdf(amount):
     val_formattata = f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"EUR {val_formattata}"
 
-# --- MOTORE PDF (BLINDATURA TOTALE) ---
+# --- MOTORE PDF (AUDIT TECNICO) ---
 class AegisReport(FPDF):
     def header(self):
         self.set_font('helvetica', 'B', 12); self.set_text_color(100)
         self.cell(0, 10, 'AEGIS | Audit Quantitativo Indipendente', 0, 1, 'L')
         self.line(10, 20, 200, 20); self.ln(10)
-
     def footer(self):
         self.set_y(-35); self.set_font('helvetica', 'I', 7); self.set_text_color(140)
-        disclaimer = (
-            "DOCUMENTO TECNICO-INFORMATIVO EX ART. 1, C. 5-SEPTIES E ART. 94 TUF: "
-            "Il presente report non costituisce consulenza personalizzata ne' sollecitazione al risparmio. "
-            "L'elaborazione si basa su algoritmi matematici applicati a dati storici. "
-            "La scelta finale di investimento spetta esclusivamente all'utente previa consultazione dei prospetti (KID)."
-        )
+        disclaimer = "AVVISO LEGALE EX ART. 1 E 94 TUF: Documento tecnico-informativo non personalizzato."
         self.multi_cell(0, 4, disclaimer, align='C')
 
 def generate_safe_pdf(data_list, score, loss, ter, yrs, cap):
     pdf = AegisReport()
     pdf.add_page(); pdf.set_font('helvetica', 'B', 20); pdf.set_text_color(20, 33, 61)
     pdf.cell(0, 15, 'REDAZIONE TECNICA DI ANALISI PATRIMONIALE', 0, 1, 'C'); pdf.ln(10)
-    
-    # Box Indice Inefficienza
     pdf.set_fill_color(245, 245, 245); pdf.rect(10, 45, 190, 40, 'F')
     pdf.set_xy(15, 50); pdf.set_font('helvetica', 'B', 14); pdf.set_text_color(192, 57, 43) 
     pdf.cell(0, 10, f'INDICE DI INEFFICIENZA RILEVATO: {float(score)}/10', 0, 1, 'L')
     pdf.set_font('helvetica', '', 11); pdf.set_text_color(0)
     status = "ALTA (Analisi consigliata)" if score > 6 else "MODERATA (Ottimizzazione possibile)"
     pdf.cell(0, 10, f'GRADO DI DISPERSIONE: {status}', 0, 1, 'L'); pdf.ln(20)
-
-    # Analisi Dispersione
     pdf.set_font('helvetica', 'B', 13); pdf.cell(0, 10, '1. PROIEZIONE MATEMATICA DEGLI ONERI', 0, 1, 'L')
     pdf.set_font('helvetica', '', 10)
-    pdf.multi_cell(0, 6, f"Sulla base dei costi (TER) e del gap tecnico storico, la proiezione a {yrs} anni stima una dispersione potenziale di {format_euro_pdf(loss)} rispetto a parametri di mercato efficienti."); pdf.ln(10)
-
-    # Tabella
+    pdf.multi_cell(0, 6, f"Proiezione a {yrs} anni: dispersione potenziale di {format_euro_pdf(loss)}."); pdf.ln(10)
     pdf.set_font('helvetica', 'B', 10); pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255)
     pdf.cell(45, 10, ' ISIN', 1, 0, 'L', 1); pdf.cell(100, 10, ' STRUMENTO', 1, 0, 'L', 1); pdf.cell(45, 10, ' GAP TECNICO %', 1, 1, 'C', 1)
     pdf.set_text_color(0); pdf.set_font('helvetica', '', 9)
     for item in data_list:
         n = item['Nome'].encode('ascii', 'ignore').decode('ascii')
         pdf.cell(45, 10, f" {item['ISIN']}", 1); pdf.cell(100, 10, f" {n[:50]}", 1); pdf.cell(45, 10, f"{float(item['Gap Tecnico %'])}% ", 1, 1, 'R')
-    
-    # Parametri di Raffronto
-    pdf.ln(10); pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255); pdf.set_font('helvetica', 'B', 12)
-    pdf.cell(0, 10, ' 2. PARAMETRI DI RAFFRONTO TECNICO', 0, 1, 'L', 1)
-    pdf.set_text_color(0); pdf.set_font('helvetica', '', 10); pdf.ln(2)
-    if score > 6:
-        pdf.multi_cell(0, 6, "I dati indicano che l'efficienza massima teorica per questa tipologia di portafoglio si ottiene attraverso:\n- Riduzione del TER complessivo sotto lo 0.30%.\n- Verifica delle commissioni di retrocessione implicite.\n- Allineamento ai benchmark istituzionali a basso costo.")
-    else:
-        pdf.multi_cell(0, 6, "L'analisi suggerisce margini di miglioramento tramite:\n- Ottimizzazione dell'efficienza fiscale (minusvalenze).\n- Monitoraggio della correlazione tra gli asset (Soglia < 0.50).\n- Ribilanciamento tecnico periodico.")
-    
     return bytes(pdf.output())
 
-# --- LOGICA DI ANALISI ---
+# --- LOGICA DATI ---
 def analyze_pdf(pdf_file):
     text = ""
     try:
@@ -95,8 +81,37 @@ def get_performance_data(isin_list):
             else:
                 fr = float(((h['Close'].iloc[-1] / h['Close'].iloc[0]) - 1) * 100)
                 results.append({"ISIN": isin, "Nome": tk.info.get('longName', isin)[:50], "Gap Tecnico %": round(float(br - fr), 2)})
-        except: results.append({"ISIN": isin, "Nome": f"Dato non disponibile ({isin})", "Gap Tecnico %": 35.0})
+        except: results.append({"ISIN": isin, "Nome": f"Errore Dati ({isin})", "Gap Tecnico %": 35.0})
     return results, br
 
-# --- INTERFACCIA ---
-st.title("🛡️ AEGIS: Audit Quantitativo Indipendente")
+# --- INTERFACCIA PRINCIPALE ---
+st.title("🛡️ AEGIS: Intelligence Patrimoniale")
+st.error("⚖️ **REDAZIONE TECNICA OBBLIGATORIA EX ART. 1 E 94 TUF**")
+
+with st.sidebar:
+    st.header("⚙️ Parametri Audit")
+    with st.expander("📊 GUIDA COSTI MEDI"):
+        st.write("ETF: 0.1% | Fondi: 2.2% | Polizze: 4%+")
+    p = st.selectbox("Tipologia:", ["Fondi Comuni", "Polizze", "Dato Manuale"])
+    costs = {"Fondi Comuni": 2.2, "Polizze": 3.8, "Dato Manuale": 2.2}
+    cap = st.number_input("Capitale Investito (€)", value=200000)
+    ter = st.slider("TER (%) rilevato", 0.0, 5.0, costs[p])
+    yrs = st.slider("Orizzonte Strategico (Anni)", 5, 30, 20)
+
+# Calcoli matematici
+f_b = cap * ((1.05 - (ter/100))**yrs)
+f_a = cap * ((1.05 - 0.002)**yrs)
+loss = f_a - f_b
+
+up = st.file_uploader("📂 Carica KID per Analisi ISIN", type="pdf")
+
+if up:
+    isins = analyze_pdf(up)
+    if isins:
+        res, b_ret = get_performance_data(isins)
+        st.subheader("🔍 Risultanze di Mercato")
+        st.table(pd.DataFrame(res))
+        score = round(min((ter * 2) + (np.mean([item['Gap Tecnico %'] for item in res]) / 10), 10), 1)
+        
+        # --- DASHBOARD METRICS ---
+        st
