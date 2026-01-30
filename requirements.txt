@@ -1,7 +1,4 @@
 streamlit
-pandas
-yfinance
-plotly
-numpy
 pdfplumber
-fpdf2
+plotly
+yfinance
