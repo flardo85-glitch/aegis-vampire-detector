@@ -10,6 +10,7 @@ from fpdf import FPDF
 # --- CONFIGURAZIONE ---
 st.set_page_config(page_title="AEGIS: Quantitative Audit", layout="wide", page_icon="🛡️")
 
+# --- FUNZIONI SACRE (NON TOCCATE) ---
 def format_euro_ui(amount):
     return f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
 
@@ -17,7 +18,7 @@ def format_euro_pdf(amount):
     val_formattata = f"{amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"EUR {val_formattata}"
 
-# --- MOTORE PDF (BLINDATURA TOTALE) ---
+# --- MOTORE PDF (VERSIONE CORRETTA RIPRISTINATA) ---
 class AegisReport(FPDF):
     def header(self):
         self.set_font('helvetica', 'B', 12); self.set_text_color(100)
@@ -39,7 +40,6 @@ def generate_safe_pdf(data_list, score, loss, ter, yrs, cap):
     pdf.add_page(); pdf.set_font('helvetica', 'B', 20); pdf.set_text_color(20, 33, 61)
     pdf.cell(0, 15, 'REDAZIONE TECNICA DI ANALISI PATRIMONIALE', 0, 1, 'C'); pdf.ln(10)
     
-    # Box Indice Inefficienza
     pdf.set_fill_color(245, 245, 245); pdf.rect(10, 45, 190, 40, 'F')
     pdf.set_xy(15, 50); pdf.set_font('helvetica', 'B', 14); pdf.set_text_color(192, 57, 43) 
     pdf.cell(0, 10, f'INDICE DI INEFFICIENZA RILEVATO: {float(score)}/10', 0, 1, 'L')
@@ -47,12 +47,10 @@ def generate_safe_pdf(data_list, score, loss, ter, yrs, cap):
     status = "ALTA (Analisi consigliata)" if score > 6 else "MODERATA (Ottimizzazione possibile)"
     pdf.cell(0, 10, f'GRADO DI DISPERSIONE: {status}', 0, 1, 'L'); pdf.ln(20)
 
-    # Analisi Dispersione
     pdf.set_font('helvetica', 'B', 13); pdf.cell(0, 10, '1. PROIEZIONE MATEMATICA DEGLI ONERI', 0, 1, 'L')
     pdf.set_font('helvetica', '', 10)
     pdf.multi_cell(0, 6, f"Sulla base dei costi (TER) e del gap tecnico storico, la proiezione a {yrs} anni stima una dispersione potenziale di {format_euro_pdf(loss)} rispetto a parametri di mercato efficienti."); pdf.ln(10)
 
-    # Tabella
     pdf.set_font('helvetica', 'B', 10); pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255)
     pdf.cell(45, 10, ' ISIN', 1, 0, 'L', 1); pdf.cell(100, 10, ' STRUMENTO', 1, 0, 'L', 1); pdf.cell(45, 10, ' GAP TECNICO %', 1, 1, 'C', 1)
     pdf.set_text_color(0); pdf.set_font('helvetica', '', 9)
@@ -60,7 +58,6 @@ def generate_safe_pdf(data_list, score, loss, ter, yrs, cap):
         n = item['Nome'].encode('ascii', 'ignore').decode('ascii')
         pdf.cell(45, 10, f" {item['ISIN']}", 1); pdf.cell(100, 10, f" {n[:50]}", 1); pdf.cell(45, 10, f"{float(item['Gap Tecnico %'])}% ", 1, 1, 'R')
     
-    # Parametri di Raffronto
     pdf.ln(10); pdf.set_fill_color(20, 33, 61); pdf.set_text_color(255); pdf.set_font('helvetica', 'B', 12)
     pdf.cell(0, 10, ' 2. PARAMETRI DI RAFFRONTO TECNICO', 0, 1, 'L', 1)
     pdf.set_text_color(0); pdf.set_font('helvetica', '', 10); pdf.ln(2)
@@ -71,7 +68,7 @@ def generate_safe_pdf(data_list, score, loss, ter, yrs, cap):
     
     return bytes(pdf.output())
 
-# --- LOGICA DI ANALISI ---
+# --- LOGICA DI ANALISI (NON TOCCATA) ---
 def analyze_pdf(pdf_file):
     text = ""
     try:
@@ -98,7 +95,7 @@ def get_performance_data(isin_list):
         except: results.append({"ISIN": isin, "Nome": f"Dato non disponibile ({isin})", "Gap Tecnico %": 35.0})
     return results, br
 
-# --- INTERFACCIA ---
+# --- INTERFACCIA (INTEGRAZIONE DASHBOARD) ---
 st.title("🛡️ AEGIS: Audit Quantitativo Indipendente")
 
 with st.container():
@@ -124,16 +121,47 @@ if up:
     isins = analyze_pdf(up)
     if isins:
         res, b_ret = get_performance_data(isins)
-        st.table(pd.DataFrame(res))
+        
+        # --- SEZIONE DASHBOARD EXECUTIVE ---
+        st.divider()
         score = round(min((ter * 2) + (np.mean([item['Gap Tecnico %'] for item in res]) / 10), 10), 1)
-        st.subheader(f"📊 Indice Inefficienza: {score}/10")
-        em = st.text_input("Inserisci mail per il report:")
-        if em and "@" in em:
-            pdf_data = generate_safe_pdf(res, score, loss, ter, yrs, cap)
-            st.download_button("📩 Scarica Report Tecnico", data=pdf_data, file_name="AEGIS_Audit_Report.pdf")
-    else: st.warning("Nessun codice identificativo rilevato.")
+        
+        # Row 1: Metriche Chiave
+        m1, m2, m3 = st.columns(3)
+        m1.metric("DISPERSIONE STIMATA", format_euro_ui(loss), delta_color="inverse")
+        m2.metric("INDICE INEFFICIENZA", f"{score}/10")
+        m3.metric("EFFICIENZA CAPITALE", f"{round((f_b/f_a)*100, 1)}%")
+        
+        # Row 2: Grafici e Tabella
+        st.divider()
+        c1, c2 = st.columns([2, 1])
+        
+        with c1:
+            st.write("**Proiezione del Gap Patrimoniale (Area di Perdita)**")
+            y_range = np.arange(0, yrs + 1)
+            df_plot = pd.DataFrame({
+                'Anni': y_range,
+                'Efficiente (Target)': [cap * ((1.05 - 0.002)**y) for y in y_range],
+                'Attuale (Audit)': [cap * ((1.05 - (ter/100))**y) for y in y_range]
+            })
+            st.plotly_chart(px.area(df_plot, x='Anni', y=['Efficiente (Target)', 'Attuale (Audit)'], 
+                                   color_discrete_sequence=['#2ecc71', '#e74c3c'], template="plotly_white"), use_container_width=True)
+            
+            st.write("**Dettaglio Tecnico Posizioni**")
+            st.table(pd.DataFrame(res))
 
-st.divider(); c1, c2 = st.columns(2)
-with c1:
-    st.metric("DISPERSIONE STIMATA", format_euro_ui(loss))
-    st.plotly_chart(px.pie(names=['Netto Stimato', 'Dispersione Costi'], values=[f_b, loss], hole=0.4, color_discrete_sequence=['#2ecc71', '#e74c3c']))
+        with c2:
+            st.write("**Composizione del Patrimonio**")
+            st.plotly_chart(px.pie(names=['Capitale Netto', 'Oneri/Gap'], values=[f_b, loss], 
+                                   hole=0.4, color_discrete_sequence=['#2ecc71', '#e74c3c']), use_container_width=True)
+            
+            em = st.text_input("Inserisci mail per il report:")
+            if em and "@" in em:
+                pdf_data = generate_safe_pdf(res, score, loss, ter, yrs, cap)
+                st.download_button("📩 Scarica Report Tecnico", data=pdf_data, file_name="AEGIS_Audit_Report.pdf")
+    else:
+        st.warning("Nessun codice identificativo rilevato.")
+
+# --- FOOTER ORIGINALE ---
+st.divider()
+st.caption("Analisi algoritmica basata su dati di mercato correnti e simulazioni finanziarie.")
